@@ -42,7 +42,7 @@ unsigned char G_io_seproxyhal_spi_buffer[IO_SEPROXYHAL_BUFFER_SIZE_B];
 #define OFFSET_LC 4
 #define OFFSET_CDATA 5
 
-void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx) {
+void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx, int rx) {
     unsigned short sw = 0;
 
     BEGIN_TRY {
@@ -60,12 +60,18 @@ void handleApdu(volatile unsigned int *flags, volatile unsigned int *tx) {
                 case INS_SIGN_MESSAGE16:
                     dataLength = U2BE(G_io_apdu_buffer, OFFSET_LC);
                     dataBuffer = &G_io_apdu_buffer[OFFSET_CDATA16];
+                    if (rx < OFFSET_CDATA16 || (rx != dataLength + OFFSET_CDATA16)) {
+                        THROW(ApduReplySdkExceptionOverflow);
+                    }
                     break;
                 // Modern instructions use 8bit dataLength
                 // as per Ledger convention
                 default:
                     dataLength = G_io_apdu_buffer[OFFSET_LC];
                     dataBuffer = &G_io_apdu_buffer[OFFSET_CDATA];
+                    if (rx < OFFSET_CDATA || (rx != dataLength + OFFSET_CDATA)) {
+                        THROW(ApduReplySdkExceptionOverflow);
+                    }
                     break;
             }
 
@@ -173,7 +179,7 @@ void app_main(void) {
 
                 PRINTF("New APDU received:\n%.*H\n", rx, G_io_apdu_buffer);
 
-                handleApdu(&flags, &tx);
+                handleApdu(&flags, &tx, rx);
             }
             CATCH(ApduReplySdkExceptionIoReset) {
                 THROW(ApduReplySdkExceptionIoReset);
